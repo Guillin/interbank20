@@ -89,6 +89,12 @@ def add_num_feateng(df):
             lambda x: x.rolling(window).std(skipna=True)
         )
     
+    # Percentage change between the current and a prior element.
+    for p in [1, 3, 6]:
+        df[f"{c}_pct_p{p}"] = df.groupby(groupBy)[c].transform(
+            lambda x: x.pct_change(periods=p)
+        )
+    
     # Moving Acum average
     # for window in [3, 6, 9]:
     #     df[f"{c}_rolling_acum_mean_t{window}"] = df.groupby(groupBy)[c].transform(
