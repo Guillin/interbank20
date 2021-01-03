@@ -132,9 +132,7 @@ def load_data(input_file):
 
 # SAVE DATASET
 def save_data(output_file, data):
-    
-    with open(config.OUTPUT_PATH + f'{output_file}.pkl','wb') as f:
-        pickle.dump(data, f)
+    data.to_pickle(f"{config.OUTPUT_PATH}{output_file}.pkl")
     
     return 0
 
