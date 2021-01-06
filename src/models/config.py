@@ -1,6 +1,6 @@
 # config.py
 INPUT_PATH = "../../data/train_test/"
-MODEL_OUTPUT = "../../models/"
+MODEL_PATH = "../../models/"
 NJOBS = -1
 USEGPU = False
 VERBOSE = 1
