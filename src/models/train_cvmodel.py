@@ -132,7 +132,7 @@ def run_regression(model, X_train_vector, Y_train_vector, X_val_vector, Y_val_ve
 
 def run(kind, model, folds, metric):
     logger = logging.getLogger(__name__)
-    logger.info(f'INIT: train {kind} model')
+    logger.info(f'INIT: train CV {kind} model')
 
     if kind == 'classification':
         # load train and validation datasets
@@ -141,13 +141,13 @@ def run(kind, model, folds, metric):
         # fetch the model from model_dispatcher
         clf = model_dispatcher.models[model]
         
-        logger.info(f'RUN: training cv model: {model}')
+        logger.info(f'RUN: training cv model - {model}')
         cv_result = train_classif_model(model=clf, metric=metric, folds=folds, X=X_train, y=y_train, plot_roc=config.PLOT) 
         
         # get test score result
         cv_scores = cv_result[f"test_score"]
 
-        logger.info(f'CV RESULT: {metric} - mean %.3f - std (%.3f)' % (mean(cv_scores), std(cv_scores)))
+        logger.info(f'RUN: CV result - {metric} - mean %.3f - std (%.3f)' % (mean(cv_scores), std(cv_scores)))
 
         # get list of estimators 
         cv_models = cv_result['estimator']
@@ -155,15 +155,15 @@ def run(kind, model, folds, metric):
         cv_test_result = test_classif_model(cv_models, metric, X_test, y_test)    
 
 
-        logger.info(f'TEST CV RESULT: {metric} - mean %.3f - std (%.3f)' % (mean(cv_test_result), std(cv_test_result)))
+        logger.info(f'RUN: test CV result - {metric} - mean %.3f - std (%.3f)' % (mean(cv_test_result), std(cv_test_result)))
 
 
-        # saving final model
-        save_models(cv_models, model)
-
-        logger.info(f'SAVE MODEL: {model}' )
-
-        logger.info('END: train cv model' )
+        # saving final models
+        if config.SAVE_MODEL:
+            save_models(cv_models, model)
+            logger.info(f'RUN: save model - {model}' )
+        
+        logger.info(f'END: train CV {kind} model' )
        
 
         pass

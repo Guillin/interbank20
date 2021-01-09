@@ -56,43 +56,25 @@ def load_data(kind):
 
 
 
-def cv_classification(model, metric, folds, X, y, plot_roc=False):
+def train_classif_model(model, X_train, y_train):
 
-    cvscores = []
-    cv = StratifiedKFold(n_splits=folds, random_state=config.SEED)
+    # fit the model on training data
+    clf = model.fit(X_train, y_train)
 
-    metricfun = metric_dispatcher.metrics_score[metric]
-
-    if plot_roc and metric=='roc_auc':
-
-        plot_roc_curve_cv(model, X, y, cv)
-    
-    else:
-        cvscores = cross_val_score(model, X, y, scoring=make_scorer(metricfun, greater_is_better=True), cv=cv, n_jobs=config.NJOBS, error_score='raise', verbose=config.VERBOSE)
-    
-    return cvscores
+    return clf    
 
     pass
 
 
-def test_classification(model, metric, X_train, y_train, X_test, y_test):
+def test_classif_model(model, metric, X_test, y_test):
 
 
-    # fit the model on training data
-    model.fit(X_train, y_train)
+    metricfun = metric_dispatcher.metrics_score[metric]
+    y_preds = model.predict_proba(X_test)[:, 1]
+   
 
-    metric_function = metric_dispatcher[metric]
-
-    y_preds = []
-
-    # create predictions for validation samples
-    if metric in ['roc_auc']:
-        y_preds = model.predict_proba(X_test)
-    else:
-        y_preds = model.predict(X_test)
-
-
-    return metric_function(y_test, y_preds)
+    return metricfun(y_test, y_preds)
+    
     pass
 
 
@@ -136,9 +118,11 @@ def run_regression(model, X_train_vector, Y_train_vector, X_val_vector, Y_val_ve
 
     pass
 
+def save_model(model,model_name):
+    pickle.dump(model, open(f'{config.MODEL_PATH}/{model_name}.bin', 'wb'))
+    return 0
 
-
-def run(kind, model, folds, metric):
+def run(kind, model, metric):
     logger = logging.getLogger(__name__)
     logger.info(f'INIT: train {kind} model')
 
@@ -149,12 +133,21 @@ def run(kind, model, folds, metric):
         # fetch the model from model_dispatcher
         clf = model_dispatcher.models[model]
         
-        logger.info(f'RUN: training model: {model}')
-        cv_scores = cv_classification(model=clf, metric=metric, folds=folds, X=X_train, y=y_train, plot_roc=config.PLOT) 
-        logger.info(f'RESULT: {metric} - mean %.3f - std (%.3f)' % (mean(cv_scores), std(cv_scores)))
+        logger.info(f'RUN: training model - {model}')
+        clf = train_classif_model(clf, X_train, y_train)
+        
+        # testing final model with test dataset
+        score = test_classif_model(clf, metric, X_test, y_test)
 
-        logger.info('END: train model' )
-       
+        logger.info(f'RUN: test result - {metric} - %.3f' % (score))
+
+        # saving final model
+        if config.SAVE_MODEL:
+            save_model(clf, model)
+            logger.info(f'RUN: save model - {model}' )
+
+        logger.info(f'END: train {kind} model' )
+
 
         pass
     else:
@@ -172,8 +165,6 @@ if __name__ == "__main__":
         help="Specify if problem will be a classification or regression. Values: 'classification' or 'regression'", type=str )
     parser.add_argument( "--model",	 required=True, 
         help="Select kind of model to be used to train from model_dispatcher. Ex: 'rf' equal to Random Forest", type=str )
-    parser.add_argument( "--folds",  
-        help="Number of folds to be used in order to implement Cross Validation. This arg must be provided only if you are using classification, for regression problems, folds must be done using time split methods.", required=False, type=int )
     parser.add_argument( "--metric", 
         help="Metric that will be used to validate the performance of the model. Values must be provided from metric_dispatcher. Ex: 'accuracy'", required=True, type=str )
     args = vars(parser.parse_args())
@@ -181,4 +172,4 @@ if __name__ == "__main__":
 
     assert args['kind'] in ['classification', 'regression'], f"'kind' should be 'classification' or 'regression'. {args['kind']} was provided"
     
-    run(kind=args['kind'], model=args['model'], folds=args['folds'], metric=args['metric'])
+    run(kind=args['kind'], model=args['model'], metric=args['metric'])
