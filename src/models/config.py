@@ -1,6 +1,11 @@
 # config.py
 INPUT_PATH = "../../data/train_test/"
 MODEL_PATH = "../../models/"
+SAVE_MODEL = True
+TEST_PATH = "../../data/features/"
+SUBMIT_PATH = "../../data/submit/"
+KAGGLE_PROJECT = "interbank20"
+KAGGLE_SUBMIT = True
 NJOBS = -1
 USEGPU = False
 VERBOSE = 1
