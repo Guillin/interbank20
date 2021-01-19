@@ -58,8 +58,9 @@ def main(output_file):
 
     logger.info('RUN: loading data')
     se = load_data('se_train')
-    rcc = load_data('rcc_train_featengv1')
+    rcc = load_data('rcc_train_featengv1-3')
     censo = load_data('censo_train')
+    sunat = load_data('sunat_train_featengv1')
     target = load_data('y_train')
 
 
@@ -73,13 +74,14 @@ def main(output_file):
     gc.collect()  
     features = pd.merge(rcc, se, how='left', on='key_value')
     features = pd.merge(features, censo, how='left', on='key_value')
+    features = pd.merge(features, sunat, how='left', on='key_value')
     features = pd.merge(features, target, how='left', on='key_value')
     features.fillna(-9999,inplace=True)
 
 
     logger.info(f'RUN: features size : {features.shape}')
 
-    del se ,rcc, censo, target
+    del se ,rcc, censo, sunat
 
     logger.info(f'RUN: saving features')
     save_data(output_file, features)
