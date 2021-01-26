@@ -50,6 +50,46 @@ def reduce_mem_usage(df, verbose=False):
         )
     return df
 
+def add_cat_feateng(df):
+
+    c = df.columns[0]
+    df.reset_index(inplace=True)
+    groupBy='key_value'  # TODO: harcodeado, ver como pasar como parametro
+
+    for p in [1, 3]:
+        df[f"{c}_diff_p{p}"] = df.groupby(groupBy)[c].transform(
+            lambda x: x.diff(p)
+        )
+    
+    # count
+    df[f"{c}_count"] = df.groupby(groupBy)[c].transform(
+            lambda x: x.count()
+        )
+
+
+    for window in [3, 6, 9]:
+        df[f"{c}_rolling_min_t{window}"] = df.groupby(groupBy)[c].transform(
+            lambda x: x.rolling(window).min()
+        )
+
+    for window in [3, 6, 9]:
+        df[f"{c}_rolling_max_t{window}"] = df.groupby(groupBy)[c].transform(
+            lambda x: x.rolling(window).max()
+        )
+
+ 
+    
+
+    # TODO: harcodeado, ver como pasar como parametro
+    df.set_index(['key_value', 'codmes'], inplace=True)
+
+    # para saber si es una variable numerica o categorica
+    df.columns =  [c + '_cat' for c in df.columns]
+
+    return df
+
+    pass
+
 def add_num_feateng(df):
 
     c = df.columns[0]
@@ -121,8 +161,14 @@ def add_num_feateng(df):
     #         lambda x: x.rolling(window).kurt()
     #     )
 
+    
+
     # TODO: harcodeado, ver como pasar como parametro
-    return df.set_index(['key_value', 'codmes']) 
+    df.set_index(['key_value', 'codmes'], inplace=True) 
+
+    # para saber si es una variable numerica o categorica
+    df.columns =  [c + '_num' for c in df.columns]
+    return df
 
 # LOAD DATASET
 def load_data(input_file):
@@ -179,7 +225,6 @@ def build_features(data):
 
     # saldo
     saldo_df = get_statistics(data, 'key_value', 'saldo', statfunc=['sum','count','min', 'max','mean','std'])
-
     # saldo by producto
     # saldo_xtab_df = data.pivot_table(
     #                         values='saldo', 
@@ -267,13 +312,48 @@ def build_features(data):
 
     # rename columns witch the value of each var
     condicion_cross_products.columns = [f"PRODUCTO_{c}_condicion_" for c in condicion_cross_products.columns]
-    condicion_cross_products.reset_index(inplace=True)
+    
+    
+    
+    #condicion_cross_products.reset_index(inplace=True)
 
-    condicion_cross_products = condicion_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
+    condicion_cross_products.dropna(axis=1,how='all',inplace=True)
 
-    features = pd.merge(features, condicion_cross_products, how='left', on=['key_value','codmes'])
+    # we split the dataframe in n pieces (for each column) in order to process it in each CPU core
+    df_split = np.array_split(condicion_cross_products, condicion_cross_products.shape[1], axis=1)
+    gc.collect()
 
-    del condicion_cross_products
+
+    condicion_num_feateng = []
+    for col in tqdm(range(0,len(df_split), NCORES )):
+        pool = Pool(NCORES)
+        result = pd.concat(pool.map(add_num_feateng, df_split[col:NCORES+col]), axis=1)
+        condicion_num_feateng.append(result)
+        del result
+        gc.collect()
+        pool.close()
+        pool.join()
+
+
+    condicion_num_feateng = pd.concat(condicion_num_feateng, axis=1)
+    condicion_num_feateng.reset_index(inplace=True)
+
+
+    #condicion_cross_products = condicion_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
+
+    #features = pd.merge(features, condicion_cross_products, how='left', on=['key_value','codmes'])
+    
+
+    # keep only last reg of each key_value
+    condicion_num_feateng = condicion_num_feateng.sort_values('codmes', ascending=True).groupby('key_value').last()
+    condicion_num_feateng.reset_index(inplace=True)
+    gc.collect()
+
+    
+
+    features = pd.merge(features, condicion_num_feateng, how='left', on='key_value')
+
+    del condicion_cross_products, condicion_num_feateng
     gc.collect()
 
     # ==============================================================
@@ -288,14 +368,38 @@ def build_features(data):
 
     # rename columns witch the value of each var
     riesgodir_cross_products.columns = [f"PRODUCTO_{c}_RIESGO_DIRECTO_" for c in riesgodir_cross_products.columns]
-    riesgodir_cross_products.reset_index(inplace=True)
 
-    riesgodir_cross_products = riesgodir_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
+    riesgodir_cross_products.dropna(axis=1,how='all',inplace=True)
 
-    features = pd.merge(features, riesgodir_cross_products, how='left', on=['key_value','codmes'])
-
-    del riesgodir_cross_products
+    # we split the dataframe in n pieces (for each column) in order to process it in each CPU core
+    df_split = np.array_split(riesgodir_cross_products, riesgodir_cross_products.shape[1], axis=1)
     gc.collect()
+
+
+    riesgodir_cat_feateng = []
+    for col in tqdm(range(0,len(df_split), NCORES )):
+        pool = Pool(NCORES)
+        result = pd.concat(pool.map(add_cat_feateng, df_split[col:NCORES+col]), axis=1)
+        riesgodir_cat_feateng.append(result)
+        del result
+        gc.collect()
+        pool.close()
+        pool.join()
+
+
+    riesgodir_cat_feateng = pd.concat(riesgodir_cat_feateng, axis=1)
+    riesgodir_cat_feateng.reset_index(inplace=True)
+
+
+    riesgodir_cat_feateng = riesgodir_cat_feateng.sort_values('codmes', ascending=True).groupby('key_value').last()
+    riesgodir_cat_feateng.reset_index(inplace=True)
+    gc.collect(2)
+
+    features = pd.merge(features, riesgodir_cat_feateng, how='left', on='key_value')
+
+    del riesgodir_cat_feateng, riesgodir_cross_products
+    gc.collect()
+
 
     # ==============================================================
     
@@ -309,7 +413,7 @@ def build_features(data):
 
 
     # rename columns witch the value of each var
-    tipodcred_cross_products.columns = [f"PRODUCTO_{c}_tipo_credito_" for c in tipodcred_cross_products.columns]
+    tipodcred_cross_products.columns = [f"PRODUCTO_{c}_tipo_credito_cat" for c in tipodcred_cross_products.columns]
     tipodcred_cross_products.reset_index(inplace=True)
 
     tipodcred_cross_products = tipodcred_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
@@ -332,7 +436,7 @@ def build_features(data):
 
 
     # rename columns witch the value of each var
-    codinstfin_cross_products.columns = [f"PRODUCTO_{c}_cod_instit_financiera_" for c in codinstfin_cross_products.columns]
+    codinstfin_cross_products.columns = [f"PRODUCTO_{c}_cod_instit_financiera_cat" for c in codinstfin_cross_products.columns]
     codinstfin_cross_products.reset_index(inplace=True)
 
     codinstfin_cross_products = codinstfin_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
