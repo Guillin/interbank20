@@ -58,12 +58,8 @@ def load_data(kind):
 
 def train_classif_model(model, metric, folds, X, y, plot_roc=False):
 
-    cvscores = []
-    #cv = StratifiedKFold(n_splits=folds, random_state=config.SEED)
-
     metricfun = metric_dispatcher.metrics_score[metric]
 
-    #cvscores = cross_val_score(model, X, y, scoring=make_scorer(metricfun, greater_is_better=True), cv=folds, n_jobs=config.NJOBS, error_score='raise', verbose=config.VERBOSE)
     cvresult = cross_validate(model, X, y, scoring=make_scorer(metricfun, greater_is_better=True), cv=folds, n_jobs=config.NJOBS, error_score='raise', verbose=config.VERBOSE, return_estimator=True)
 
     return cvresult
