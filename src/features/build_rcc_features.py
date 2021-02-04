@@ -56,7 +56,7 @@ def add_cat_feateng(df):
     df.reset_index(inplace=True)
     groupBy='key_value'  # TODO: harcodeado, ver como pasar como parametro
 
-    for p in [1, 3]:
+    for p in [1, 3, 6, 12]:
         df[f"{c}_diff_p{p}"] = df.groupby(groupBy)[c].transform(
             lambda x: x.diff(p)
         )
@@ -67,15 +67,15 @@ def add_cat_feateng(df):
         )
 
 
-    for window in [3, 6, 9]:
-        df[f"{c}_rolling_min_t{window}"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.rolling(window).min()
-        )
+    # for window in [3, 6, 9]:
+    #     df[f"{c}_rolling_min_t{window}"] = df.groupby(groupBy)[c].transform(
+    #         lambda x: x.rolling(window).min()
+    #     )
 
-    for window in [3, 6, 9]:
-        df[f"{c}_rolling_max_t{window}"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.rolling(window).max()
-        )
+    # for window in [3, 6, 9]:
+    #     df[f"{c}_rolling_max_t{window}"] = df.groupby(groupBy)[c].transform(
+    #         lambda x: x.rolling(window).max()
+    #     )
 
  
     
@@ -132,36 +132,14 @@ def add_num_feateng(df):
     # Percentage change between the current and a prior element.
     for p in [1, 3, 6]:
         df[f"{c}_pct_p{p}"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.pct_change(periods=p)
+            lambda x: x.pct_change(periods=p, fill_method='pad').replace(np.inf,0).replace(-np.inf,0).replace(np.nan,0)
         )
-    
-    # Moving Acum average
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_acum_mean_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.expanding(min_periods=window).mean()
-    #     )
-
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_min_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.rolling(window).min()
-    #     )
-
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_max_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.rolling(window).max()
-    #     )
-
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_skew_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.rolling(window).skew()
-    #     )
-
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_kurt_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.rolling(window).kurt()
-    #     )
 
     
+    df[f"{c}_rolling_skew"] = df.groupby(groupBy)[c].skew(skipna = True)
+    
+    df[f"{c}_rolling_kurt"] = df.groupby(groupBy)[c].kurt(skipna=True)
+        
 
     # TODO: harcodeado, ver como pasar como parametro
     df.set_index(['key_value', 'codmes'], inplace=True) 
@@ -169,6 +147,21 @@ def add_num_feateng(df):
     # para saber si es una variable numerica o categorica
     df.columns =  [c + '_num' for c in df.columns]
     return df
+
+# replace outliers with a default value
+def replace_outliers(df):
+    for x in df.columns:
+        q75,q25 = np.percentile(df.loc[:,x],[75,25])
+        intr_qr = q75-q25
+    
+        max = q75+(1.5*intr_qr)
+        min = q25-(1.5*intr_qr)
+    
+        df.loc[df[x] < min,x] = min
+        df.loc[df[x] > max,x] = max
+    
+    return df
+
 
 # LOAD DATASET
 def load_data(input_file):
@@ -225,18 +218,7 @@ def build_features(data):
 
     # saldo
     saldo_df = get_statistics(data, 'key_value', 'saldo', statfunc=['sum','count','min', 'max','mean','std'])
-    # saldo by producto
-    # saldo_xtab_df = data.pivot_table(
-    #                         values='saldo', 
-    #                         index=['key_value', 'codmes'], 
-    #                         columns='PRODUCTO', 
-    #                         aggfunc=np.sum)
 
-    # saldo_xtab_df.columns = [f"PRODUCTO_{c}" for c in saldo_xtab_df.columns]
-    # #saldo_xtab_df.sort_values(['key_value','codmes'], inplace=True, ascending=True)
-    
-    # =============== saldo by each var ===================
-    # ['condicion','tipo_credito','PRODUCTO', 'RIESGO_DIRECTO', 'COD_CLASIFICACION_DEUDOR']
     saldo_x_tab = []
     for col in ['PRODUCTO']:
         dfxtab = data.pivot_table(
@@ -256,6 +238,7 @@ def build_features(data):
 
     saldo_xtab_df.dropna(axis=1,how='all',inplace=True)
 
+    saldo_xtab_df = replace_outliers(saldo_xtab_df)
 
 
 
@@ -318,6 +301,9 @@ def build_features(data):
     #condicion_cross_products.reset_index(inplace=True)
 
     condicion_cross_products.dropna(axis=1,how='all',inplace=True)
+
+    condicion_cross_products = replace_outliers(condicion_cross_products)
+
 
     # we split the dataframe in n pieces (for each column) in order to process it in each CPU core
     df_split = np.array_split(condicion_cross_products, condicion_cross_products.shape[1], axis=1)
