@@ -136,9 +136,9 @@ def add_num_feateng(df):
         )
 
     
-    df[f"{c}_rolling_skew"] = df.groupby(groupBy)[c].skew(skipna = True)
+    df[f"{c}_skew"] = df.groupby(groupBy)[c].skew(skipna = True)
     
-    df[f"{c}_rolling_kurt"] = df.groupby(groupBy)[c].kurt(skipna=True)
+    df[f"{c}_kurt"] = df.groupby(groupBy)[c].kurt(skipna=True)
         
 
     # TODO: harcodeado, ver como pasar como parametro
