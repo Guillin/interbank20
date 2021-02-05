@@ -133,14 +133,12 @@ def add_num_feateng(df):
     # Percentage change between the current and a prior element.
     for p in [1, 3, 6]:
         df[f"{c}_pct_p{p}"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.pct_change(periods=p, fill_method='pad').replace(np.iurtnf,0).replace(-np.inf,0).replace(np.nan,0)
+            lambda x: x.pct_change(periods=p, fill_method='pad').replace(np.inf,0).replace(-np.inf,0).replace(np.nan,0)
         )
 
     
     df[f"{c}_skew"] = df.groupby(groupBy)[c].skew(skipna = True)
     
-    df[f"{c}_kurt"] = df.groupby(groupBy)[c].kurt(skipna=True)
-        
 
     # TODO: harcodeado, ver como pasar como parametro
     df.set_index(['key_value', 'codmes'], inplace=True) 
@@ -480,7 +478,7 @@ def main(input_file, output_file):
 
     logger.info('RUN: loading data')
     df = load_data(input_file)
-   
+    
     logger.info(f'RUN: data size before be processed: {df.shape}')
     
     logger.info(f'RUN: building features')
