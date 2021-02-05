@@ -15,7 +15,8 @@ from tqdm import tqdm
 import datetime
 from dateutil.relativedelta import relativedelta
 import config
-
+import os
+from google.cloud import storage
 
 # Add here whatever lib you need in order to build features
 from sklearn.preprocessing import LabelEncoder
@@ -132,7 +133,7 @@ def add_num_feateng(df):
     # Percentage change between the current and a prior element.
     for p in [1, 3, 6]:
         df[f"{c}_pct_p{p}"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.pct_change(periods=p, fill_method='pad').replace(np.inf,0).replace(-np.inf,0).replace(np.nan,0)
+            lambda x: x.pct_change(periods=p, fill_method='pad').replace(np.iurtnf,0).replace(-np.inf,0).replace(np.nan,0)
         )
 
     
@@ -172,6 +173,16 @@ def load_data(input_file):
 # SAVE DATASET
 def save_data(output_file, data):
     data.to_pickle(f"{config.OUTPUT_PATH}{output_file}.pkl")
+
+    if config.USE_GCP:
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(config.GCP_BUCKET_NAME)
+
+        blob = bucket.blob(f"{config.GCP_BUCKET_FOLDER_NAME}{output_file}.pkl")
+        blob.upload_from_filename(f"{config.OUTPUT_PATH}{output_file}.pkl")
+
+        # remove local file because it is now in the bucket
+        os.remove(f"{config.OUTPUT_PATH}{output_file}.pkl")
     
     return 0
 
