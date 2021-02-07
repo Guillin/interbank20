@@ -7,24 +7,12 @@ import pandas as pd
 from pathlib import Path
 import argparse
 import pickle
-import config
 import gc
+import os
+from google.cloud import storage
+from functions import load_data, save_data
+import config
 
-
-
-# LOAD DATASET
-def load_data(input_file):
-    data  = pd.read_pickle(f"{config.OUTPUT_PATH}{input_file}.pkl")
-
-    return data
-
-# SAVE DATASET
-def save_data(output_file, data):
-    
-    with open(config.OUTPUT_PATH + f'{output_file}.pkl','wb') as f:
-        pickle.dump(data, f)
-    
-    return 0
 
 # PROCESS DATA
 def build_features(data):
@@ -57,11 +45,11 @@ def main(output_file):
     logger.info('INIT: making features data set from processed data')
 
     logger.info('RUN: loading data')
-    se = load_data('se_train')
-    rcc = load_data('rcc_train_featengv1-3')
-    censo = load_data('censo_train')
-    sunat = load_data('sunat_train_featengv1')
-    target = load_data('y_train')
+    se = load_data('se_train', kind='pickle')
+    rcc = load_data('rcc_train_featengv6', kind='pickle')
+    censo = load_data('censo_train', kind='pickle')
+    sunat = load_data('sunat_train_featengv1', kind='pickle')
+    target = load_data('y_train', kind='pickle')
 
 
     
@@ -76,7 +64,7 @@ def main(output_file):
     features = pd.merge(features, censo, how='left', on='key_value')
     features = pd.merge(features, sunat, how='left', on='key_value')
     features = pd.merge(features, target, how='left', on='key_value')
-    features.fillna(-9999,inplace=True)
+    features = features.fillna(-9999)
 
 
     logger.info(f'RUN: features size : {features.shape}')
