@@ -51,44 +51,24 @@ def reduce_mem_usage(df, verbose=False):
         )
     return df
 
-def add_cat_feateng(df):
+def add_cat_feateng(df, groupBy='key_value'):
 
-    c = df.columns[0]
-    df.reset_index(inplace=True)
-    groupBy='key_value'  # TODO: harcodeado, ver como pasar como parametro
-
-    for p in [1, 3, 6, 12]:
-        df[f"{c}_diff_p{p}"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.diff(p)
-        )
-    
     # count
-    df[f"{c}_count"] = df.groupby(groupBy)[c].transform(
-            lambda x: x.count()
-        )
+    df_counts = df.groupby(groupBy).count()
+    df_counts.columns = [c + '_count_catvar' for c in df_counts.columns]
 
+    # max and min
+    df_max = df.groupby(groupBy).max()
+    df_max.columns = [c + '_max_catvar' for c in df_max.columns]
+    
+    df_min = df.groupby(groupBy).min()
+    df_min.columns = [c + '_min_catvar' for c in df_min.columns]
 
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_min_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.rolling(window).min()
-    #     )
-
-    # for window in [3, 6, 9]:
-    #     df[f"{c}_rolling_max_t{window}"] = df.groupby(groupBy)[c].transform(
-    #         lambda x: x.rolling(window).max()
-    #     )
+    df_ptp = df.groupby(groupBy).agg(np.ptp)
+    df_ptp.columns = [c + '_ptp_catvar' for c in df_ptp.columns]
 
  
-    
-
-    # TODO: harcodeado, ver como pasar como parametro
-    df.set_index(['key_value', 'codmes'], inplace=True)
-
-    # para saber si es una variable numerica o categorica
-    df.columns =  [c + '_cat' for c in df.columns]
-
-    return df
-
+    return df_counts.join(df_max).join(df_min).join(df_ptp)
     pass
 
 def add_num_feateng(df):
@@ -210,6 +190,11 @@ def build_features(data):
     # ****************************************************** #
 
     data.sort_values(['key_value', 'codmes'], inplace=True, ascending=True)
+
+    # id producto from test now equal to train 
+    data.PRODUCTO.fillna(255,inplace=True)
+    data.loc[:,'PRODUCTO'] = data.PRODUCTO.astype(int)
+
 
     # codmes
     codmes_df = get_statistics(data, 'key_value', 'codmes', statfunc=['min', 'max'])
@@ -354,6 +339,7 @@ def build_features(data):
     # ==============================================================
 
     # =============== Productos by RIESGO_DIRECTO ===================
+    data['RIESGO_DIRECTO'] = data['RIESGO_DIRECTO'].replace(-1,0)
     riesgodir_cross_products = data.pivot_table(
                 values='RIESGO_DIRECTO', 
                 index=['key_value', 'codmes'], 
@@ -364,31 +350,13 @@ def build_features(data):
     # rename columns witch the value of each var
     riesgodir_cross_products.columns = [f"PRODUCTO_{c}_RIESGO_DIRECTO_" for c in riesgodir_cross_products.columns]
 
-    riesgodir_cross_products.dropna(axis=1,how='all',inplace=True)
+    riesgodir_cross_products.dropna(axis=1,how='all',inplace=True)    
+    riesgodir_cross_products.reset_index(inplace=True)
 
-    # we split the dataframe in n pieces (for each column) in order to process it in each CPU core
-    df_split = np.array_split(riesgodir_cross_products, riesgodir_cross_products.shape[1], axis=1)
+    riesgodir_cat_feateng = add_cat_feateng(riesgodir_cross_products)
+    riesgodir_cat_feateng.reset_index(inplace=True)
+
     gc.collect()
-
-
-    riesgodir_cat_feateng = []
-    for col in tqdm(range(0,len(df_split), NCORES )):
-        pool = Pool(NCORES)
-        result = pd.concat(pool.map(add_cat_feateng, df_split[col:NCORES+col]), axis=1)
-        riesgodir_cat_feateng.append(result)
-        del result
-        gc.collect()
-        pool.close()
-        pool.join()
-
-
-    riesgodir_cat_feateng = pd.concat(riesgodir_cat_feateng, axis=1)
-    riesgodir_cat_feateng.reset_index(inplace=True)
-
-
-    riesgodir_cat_feateng = riesgodir_cat_feateng.sort_values('codmes', ascending=True).groupby('key_value').last()
-    riesgodir_cat_feateng.reset_index(inplace=True)
-    gc.collect(2)
 
     features = pd.merge(features, riesgodir_cat_feateng, how='left', on='key_value')
 
@@ -409,13 +377,18 @@ def build_features(data):
 
     # rename columns witch the value of each var
     tipodcred_cross_products.columns = [f"PRODUCTO_{c}_tipo_credito_cat" for c in tipodcred_cross_products.columns]
+
+    tipodcred_cross_products.dropna(axis=1,how='all',inplace=True)    
     tipodcred_cross_products.reset_index(inplace=True)
 
-    tipodcred_cross_products = tipodcred_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
+    tipocred_cat_feateng = add_cat_feateng(tipodcred_cross_products)
+    tipocred_cat_feateng.reset_index(inplace=True)
+    gc.collect()
 
-    features = pd.merge(features, tipodcred_cross_products, how='left', on=['key_value','codmes'])
 
-    del tipodcred_cross_products
+    features = pd.merge(features, tipocred_cat_feateng, how='left', on='key_value')
+
+    del tipodcred_cross_products, tipocred_cat_feateng
     gc.collect()
 
     # ==============================================================
@@ -435,8 +408,10 @@ def build_features(data):
     codinstfin_cross_products.reset_index(inplace=True)
 
     codinstfin_cross_products = codinstfin_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
+    codinstfin_cross_products.reset_index(inplace=True)
+    codinstfin_cross_products.drop('codmes', axis=1,inplace=True)
 
-    features = pd.merge(features, codinstfin_cross_products, how='left', on=['key_value','codmes'])
+    features = pd.merge(features, codinstfin_cross_products, how='left', on='key_value')
 
     del codinstfin_cross_products
     gc.collect()
@@ -453,13 +428,17 @@ def build_features(data):
 
     # rename columns witch the value of each var
     codclassdeudor_cross_products.columns = [f"PRODUCTO_{c}_COD_CLASIFICACION_DEUDOR_" for c in codclassdeudor_cross_products.columns]
+    codclassdeudor_cross_products.dropna(axis=1,how='all',inplace=True)    
     codclassdeudor_cross_products.reset_index(inplace=True)
+    codclassdeudor_cross_products.drop('codmes', axis=1,inplace=True)
 
-    codclassdeudor_cross_products = codclassdeudor_cross_products.sort_values('codmes', ascending=True).groupby('key_value').last()
+    codclassdeudor_cat_feateng = add_cat_feateng(codclassdeudor_cross_products)
+    codclassdeudor_cat_feateng.reset_index(inplace=True)
+    gc.collect()
 
-    features = pd.merge(features, codclassdeudor_cross_products, how='left', on=['key_value','codmes'])
+    features = pd.merge(features, codclassdeudor_cat_feateng, how='left', on='key_value')
 
-    del codclassdeudor_cross_products
+    del codclassdeudor_cross_products, codclassdeudor_cat_feateng
     gc.collect()
 
     # ==============================================================
