@@ -165,7 +165,7 @@ def save_data(output_file, data):
     return 0
 
 # PROCESS DATA
-def build_features(data):
+def build_features(data, output_file):
     """ You must define here how to build any features engineer from data
         :data: dataset from where features will be made
         :features: final dataset with all features eng
@@ -275,6 +275,8 @@ def build_features(data):
     gc.collect()
 
     features = pd.merge(features, saldo_df, how='left', on='key_value')
+    save_data(output_file + '_part1',features)
+
 
     del saldo_df, saldo_num_feateng
     gc.collect()
@@ -331,7 +333,10 @@ def build_features(data):
 
     
 
-    features = pd.merge(features, condicion_num_feateng, how='left', on='key_value')
+    #features = pd.merge(features, condicion_num_feateng, how='left', on='key_value')
+
+    save_data(output_file + '_part2', condicion_num_feateng)
+
 
     del condicion_cross_products, condicion_num_feateng
     gc.collect()
@@ -358,7 +363,9 @@ def build_features(data):
 
     gc.collect()
 
-    features = pd.merge(features, riesgodir_cat_feateng, how='left', on='key_value')
+    #features = pd.merge(features, riesgodir_cat_feateng, how='left', on='key_value')
+    save_data(output_file + '_part3', riesgodir_cat_feateng)
+
 
     del riesgodir_cat_feateng, riesgodir_cross_products
     gc.collect()
@@ -386,7 +393,9 @@ def build_features(data):
     gc.collect()
 
 
-    features = pd.merge(features, tipocred_cat_feateng, how='left', on='key_value')
+    #features = pd.merge(features, tipocred_cat_feateng, how='left', on='key_value')
+    save_data(output_file + '_part4', tipocred_cat_feateng)
+
 
     del tipodcred_cross_products, tipocred_cat_feateng
     gc.collect()
@@ -411,7 +420,9 @@ def build_features(data):
     codinstfin_cross_products.reset_index(inplace=True)
     codinstfin_cross_products.drop('codmes', axis=1,inplace=True)
 
-    features = pd.merge(features, codinstfin_cross_products, how='left', on='key_value')
+    #features = pd.merge(features, codinstfin_cross_products, how='left', on='key_value')
+    save_data(output_file + '_part5', codinstfin_cross_products)
+
 
     del codinstfin_cross_products
     gc.collect()
@@ -436,7 +447,9 @@ def build_features(data):
     codclassdeudor_cat_feateng.reset_index(inplace=True)
     gc.collect()
 
-    features = pd.merge(features, codclassdeudor_cat_feateng, how='left', on='key_value')
+    #features = pd.merge(features, codclassdeudor_cat_feateng, how='left', on='key_value')
+    save_data(output_file + '_part6', codclassdeudor_cat_feateng)
+
 
     del codclassdeudor_cross_products, codclassdeudor_cat_feateng
     gc.collect()
@@ -462,13 +475,13 @@ def main(input_file, output_file):
     
     logger.info(f'RUN: building features')
 
-    features = build_features(df)
+    features = build_features(df,output_file)
     del df 
 
     logger.info(f'RUN: features size : {features.shape}')
 
     logger.info(f'RUN: saving features')
-    save_data(output_file, features)
+    #save_data(output_file, features)
 
     logger.info('END: making features data set has finished.')
     ends = datetime.datetime.now()
